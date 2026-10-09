@@ -3,7 +3,9 @@ package com.bloodbank.bloodbankdonormanagementsystem;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-
+import com.bloodbank.bloodbankdonormanagementsystem.strategy.CompatibilityStrategy;
+import com.bloodbank.bloodbankdonormanagementsystem.strategy.RedBloodCellCompatibilityStrategy;
+import com.bloodbank.bloodbankdonormanagementsystem.strategy.PlasmaCompatibilityStrategy;
 import java.util.Scanner;
 
 @SpringBootApplication
@@ -86,7 +88,23 @@ public class BloodBankDonorManagementSystemApplication implements CommandLineRun
 	}
 
 	private static void handleSuggestCompatibleUnits() {
-		System.out.println("\n-> [FR5] Compatibility Match stub invoked.\n");
+		System.out.println("\n-> [FR5] Suggest Compatible Units (Strategy Pattern)");
+
+		// Variable typed as the INTERFACE (polymorphic dependency)
+		CompatibilityStrategy strategy;
+
+		String recipientGroup = "B+";
+		System.out.println("Target Recipient Blood Group: " + recipientGroup);
+
+		// 1. RBC Strategy execution
+		strategy = new RedBloodCellCompatibilityStrategy();
+		System.out.println("Scope: " + strategy.getComponentScope());
+		System.out.println("Compatible Donor Groups: " + strategy.getCompatibleDonorGroups(recipientGroup));
+
+		// 2. Plasma Strategy execution (swapping implementation polymorphically)
+		strategy = new PlasmaCompatibilityStrategy();
+		System.out.println("Scope: " + strategy.getComponentScope());
+		System.out.println("Compatible Donor Groups: " + strategy.getCompatibleDonorGroups(recipientGroup) + "\n");
 	}
 
 	private static void handleIssueUnits() {
