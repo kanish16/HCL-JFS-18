@@ -1,1 +1,5 @@
-Payment system - initial version
+<<<<<<< HEAD
+Payment System - feature B verison
+=======
+Payment system - feature A version
+>>>>>>> feature/testing-merger-conflict
