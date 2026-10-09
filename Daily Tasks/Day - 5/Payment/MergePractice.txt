@@ -1,1 +1,1 @@
-Payment system - initial version
+Payment system - feature A version
