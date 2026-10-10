@@ -1,0 +1,20 @@
+Facts supported by the trace and source
+
+• Exception shown: InvalidQuantityException, with the message Quantity must be a valid integer: abc.
+
+• Root cause: The supplied quantity text, "abc", is not an integer. Integer.parseInt("abc") throws NumberFormatException; OrderProcessor catches it and throws InvalidQuantityException instead.
+
+
+• Important frames:
+
+OrderProcessor.java:20 is where the new InvalidQuantityException is thrown.
+
+OrderProcessorApplication.java:15 is where processOrder("Keyboard", "abc", 10) was called. The exception propagates back to that call.
+
+• Exception types: InvalidQuantityException is unchecked because it extends RuntimeException. Its underlying NumberFormatException is also unchecked; it extends IllegalArgumentException. The project’s InsufficientStockException is checked because it extends Exception, but it is not the exception shown here.
+
+Why NumberFormatException appears under “Caused by”
+The catch block passes the original parsing exception into the InvalidQuantityException constructor. That constructor calls super(message, cause), preserving the original exception as the cause. Java’s stack-trace output therefore shows NumberFormatException under “Caused by”: it explains why the higher-level InvalidQuantityException was created.
+
+Fix
+No code change is necessarily required: the code deliberately converts a parsing failure into a domain-specific exception, and the application catches and prints it. If "abc" is unintended input, ensure the caller supplies an integer or validate the input at the boundary. Based on the source, this scenario is intentional; the trace alone does not establish whether the input was unexpected.
