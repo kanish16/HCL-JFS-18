@@ -1,6 +1,10 @@
 package com.bloodbank.bloodbankdonormanagementsystem.model;
 
 import com.bloodbank.bloodbankdonormanagementsystem.BloodBankConstants;
+import com.bloodbank.bloodbankdonormanagementsystem.exception.DonorIneligibleException;
+import com.bloodbank.bloodbankdonormanagementsystem.exception.IncompatibleBloodUnitException;
+import com.bloodbank.bloodbankdonormanagementsystem.strategy.CompatibilityStrategy;
+
 import java.time.LocalDate;
 import java.util.Objects;
 
@@ -18,6 +22,28 @@ public class Donor {
     // Chained Constructor 1 (First-time donor)
     public Donor(String name, int age, double weightKg, String bloodGroup, String phone) {
         this(name, age, weightKg, bloodGroup, phone, null);
+    }
+
+    public static void validateCompatibility(CompatibilityStrategy strategy, String donorGroup, String recipientGroup) {
+        if (!strategy.getCompatibleDonorGroups(recipientGroup).contains(donorGroup)) {
+            throw new IncompatibleBloodUnitException(donorGroup, recipientGroup);
+        }
+    }
+
+    public void validateEligibilityForDonation() {
+        if (this.getAge() < BloodBankConstants.MIN_DONOR_AGE || this.getAge() > BloodBankConstants.MAX_DONOR_AGE) {
+            throw new DonorIneligibleException(
+                    "Donor ineligible: Age must be between " + BloodBankConstants.MIN_DONOR_AGE
+                            + " and " + BloodBankConstants.MAX_DONOR_AGE + " years.", null);
+        }
+        if (this.getWeightKg() < BloodBankConstants.MIN_DONOR_WEIGHT_KG) {
+            throw new DonorIneligibleException(
+                    "Donor ineligible: Weight must be at least " + BloodBankConstants.MIN_DONOR_WEIGHT_KG + " kg.", null);
+        }
+        if (!this.isEligibleToDonate()) {
+            throw new DonorIneligibleException(
+                    "Donor is in cooling period until " + this.getNextEligibleDate(), this.getNextEligibleDate());
+        }
     }
 
     // Chained Constructor 2 (Full parameters with validations)
