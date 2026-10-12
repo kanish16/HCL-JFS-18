@@ -1,3 +1,4 @@
+```mermaid
 classDiagram
     class BaseEntity {
         <<abstract>>
@@ -63,3 +64,4 @@ classDiagram
 
     CompatibilityStrategy <|.. RedBloodCellCompatibilityStrategy
     CompatibilityStrategy <|.. PlasmaCompatibilityStrategy
+```
