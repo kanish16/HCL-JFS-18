@@ -36,13 +36,14 @@ public class ListPerformanceBenchmark {
         }
         long llGetNs = System.nanoTime() - start;
 
+        // Print benchmark table
         System.out.println("=========================================================================================");
-        System.out.printf("%-26s | %-12s | %-20s | %-16s%n", "Operation", "Collection", "Complexity", "Time (ms)");
+        System.out.println("Operation                   | Collection   | Complexity           | Time (ms)        ");
         System.out.println("=========================================================================================");
-        System.out.printf("%-26s | %-12s | %-20s | %10.2f ms%n", "Head Insert (" + insertElements + ")", "ArrayList", "O(N) copy shifts", alInsertNs / 1_000_000.0);
-        System.out.printf("%-26s | %-12s | %-20s | %10.2f ms%n", "Head Insert (" + insertElements + ")", "LinkedList", "O(1) pointer relink", llInsertNs / 1_000_000.0);
-        System.out.printf("%-26s | %-12s | %-20s | %10.2f ms%n", "Random get(i) (" + getOperations + ")", "ArrayList", "O(1) direct address", alGetNs / 1_000_000.0);
-        System.out.printf("%-26s | %-12s | %-20s | %10.2f ms%n", "Random get(i) (" + getOperations + ")", "LinkedList", "O(N) traversal", llGetNs / 1_000_000.0);
+        System.out.printf("Head Insert (%d)          | ArrayList    | O(N) copy shifts     | %10.2f ms%n", insertElements, alInsertNs / 1_000_000.0);
+        System.out.printf("Head Insert (%d)          | LinkedList   | O(1) pointer relink  | %10.2f ms%n", insertElements, llInsertNs / 1_000_000.0);
+        System.out.printf("Random get(i) (%d)         | ArrayList    | O(1) direct address  | %10.2f ms%n", getOperations, alGetNs / 1_000_000.0);
+        System.out.printf("Random get(i) (%d)         | LinkedList   | O(N) traversal       | %10.2f ms%n", getOperations, llGetNs / 1_000_000.0);
         System.out.println("=========================================================================================");
     }
 }
