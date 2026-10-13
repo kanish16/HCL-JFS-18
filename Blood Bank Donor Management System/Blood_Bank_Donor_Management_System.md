@@ -69,6 +69,8 @@ Auth & User Service        Donor Service
  (Donors, Donations, Blood Units, Requests,
        Issue Records, Audit Logs)
 
+
+
 Note: The module-to-service mapping can be refined during detailed design.
 ```
 
