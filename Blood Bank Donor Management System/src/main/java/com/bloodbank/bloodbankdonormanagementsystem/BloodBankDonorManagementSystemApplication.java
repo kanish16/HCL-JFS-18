@@ -1,6 +1,8 @@
 package com.bloodbank.bloodbankdonormanagementsystem;
 
 import com.bloodbank.bloodbankdonormanagementsystem.exception.DonorIneligibleException;
+import com.bloodbank.bloodbankdonormanagementsystem.exception.IncompatibleBloodUnitException;
+import com.bloodbank.bloodbankdonormanagementsystem.model.BloodRequest;
 import com.bloodbank.bloodbankdonormanagementsystem.model.BloodUnit;
 import com.bloodbank.bloodbankdonormanagementsystem.model.Donor;
 import com.bloodbank.bloodbankdonormanagementsystem.repository.BloodBankDataStore;
@@ -12,9 +14,7 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 import java.time.LocalDate;
-import java.util.Optional;
-import java.util.PriorityQueue;
-import java.util.Scanner;
+import java.util.*;
 
 @SpringBootApplication
 public class BloodBankDonorManagementSystemApplication implements CommandLineRunner {
@@ -29,8 +29,9 @@ public class BloodBankDonorManagementSystemApplication implements CommandLineRun
 	@Override
 	public void run(String... args) {
 		scanner = new Scanner(System.in);
-		boolean running = true;
+		seedInitialData(); // Preload sample data for quick testing
 
+		boolean running = true;
 		System.out.println("\n=================================================");
 		System.out.println("  BLOOD BANK & DONOR MANAGEMENT SYSTEM (JFS-18)  ");
 		System.out.println("=================================================");
@@ -46,7 +47,7 @@ public class BloodBankDonorManagementSystemApplication implements CommandLineRun
 			}
 
 			int choice = scanner.nextInt();
-			scanner.nextLine(); // Clear buffer
+			scanner.nextLine();
 
 			try {
 				switch (choice) {
@@ -64,22 +65,31 @@ public class BloodBankDonorManagementSystemApplication implements CommandLineRun
 					}
 					default -> System.out.println("\n[!] Choice out of range. Please choose between 0 and 8.\n");
 				}
-			} catch (DonorIneligibleException ex) {
-				System.out.println("\n[BUSINESS RULE VIOLATION - ELIGIBILITY]");
-				System.out.println("-> " + ex.getMessage());
-				if (ex.getNextEligibleDate() != null) {
-					System.out.println("-> Next eligible donation date: " + ex.getNextEligibleDate());
-				}
+			} catch (DonorIneligibleException | IncompatibleBloodUnitException ex) {
+				System.out.println("\n[BUSINESS RULE VIOLATION] " + ex.getMessage());
 				System.out.println("-> Menu recovered safely.\n");
 			} catch (IllegalArgumentException ex) {
 				System.out.println("\n[VALIDATION ERROR] " + ex.getMessage());
 				System.out.println("-> Menu recovered safely.\n");
 			} catch (Exception ex) {
-				System.out.println("\n[ERROR] Operation failed: " + ex.getMessage());
+				System.out.println("\n[ERROR] " + ex.getMessage());
 				System.out.println("-> Menu recovered safely.\n");
 			}
 
 		} while (running);
+	}
+
+	private static void seedInitialData() {
+		Donor d1 = new Donor("Vikram Anand", 29, 68.0, "O-", "9876543210");
+		Donor d2 = new Donor("Priya Ramesh", 26, 54.0, "B+", "9123456780");
+		dataStore.addDonor(d1);
+		dataStore.addDonor(d2);
+
+		// Preload blood inventory
+		dataStore.addBloodUnit(new BloodUnit(d1.getDonorId(), "O-", "PRBC", LocalDate.now().minusDays(10)));
+		dataStore.addBloodUnit(new BloodUnit(d1.getDonorId(), "O-", "PRBC", LocalDate.now().minusDays(2)));
+		dataStore.addBloodUnit(new BloodUnit(d2.getDonorId(), "B+", "PRBC", LocalDate.now().minusDays(5)));
+		dataStore.addBloodUnit(new BloodUnit(d2.getDonorId(), "B+", "FFP", LocalDate.now().minusDays(30)));
 	}
 
 	private static void printMenu() {
@@ -96,68 +106,34 @@ public class BloodBankDonorManagementSystemApplication implements CommandLineRun
 		System.out.println("-------------------------------------------------");
 	}
 
-	/**
-	 * FR1: Register Donor & View Eligibility Date
-	 * Stored in Set<Donor> (no duplicates)
-	 */
 	private static void handleRegisterDonor() {
 		System.out.println("\n--- [FR1] Register New Donor ---");
 		System.out.print("Enter full name: ");
 		String name = scanner.nextLine();
-
 		System.out.print("Enter age (18 - 65): ");
 		int age = Integer.parseInt(scanner.nextLine().trim());
-
-		System.out.print("Enter weight in kg (min 50.0): ");
+		System.out.print("Enter weight in kg: ");
 		double weight = Double.parseDouble(scanner.nextLine().trim());
-
-		System.out.print("Enter blood group (A+, A-, B+, B-, AB+, AB-, O+, O-): ");
+		System.out.print("Enter blood group: ");
 		String bloodGroup = scanner.nextLine().trim().toUpperCase();
-
 		System.out.print("Enter phone number: ");
 		String phone = scanner.nextLine().trim();
 
-		System.out.print("Has donor donated before? (y/n): ");
-		String donatedBefore = scanner.nextLine().trim();
-
-		LocalDate lastDonationDate = null;
-		if (donatedBefore.equalsIgnoreCase("y")) {
-			System.out.print("How many days ago was the last donation? ");
-			int daysAgo = Integer.parseInt(scanner.nextLine().trim());
-			lastDonationDate = LocalDate.now().minusDays(daysAgo);
-		}
-
-		Donor donor = new Donor(name, age, weight, bloodGroup, phone, lastDonationDate);
+		Donor donor = new Donor(name, age, weight, bloodGroup, phone);
 		donor.validateEligibilityForDonation();
+		dataStore.addDonor(donor);
 
-		boolean added = dataStore.addDonor(donor);
-		if (added) {
-			System.out.println("\n[SUCCESS] Donor Registered Successfully!");
-			System.out.println("-> Donor ID: " + donor.getDonorId());
-			System.out.println("-> Eligibility Status: " + (donor.isEligibleToDonate() ? "ELIGIBLE NOW" : "IN COOLING PERIOD"));
-			System.out.println("-> Next Eligible Date: " + donor.getNextEligibleDate() + "\n");
-		} else {
-			System.out.println("\n[!] Duplicate Donor: A donor with identical details already exists in the Registry.\n");
-		}
+		System.out.println("\n[SUCCESS] Donor Registered: " + donor.getDonorId() + " (" + donor.getName() + ")\n");
 	}
 
-	/**
-	 * FR2: Record Donation & Create Blood Unit
-	 * Stored in List<BloodUnit> and PriorityQueue<BloodUnit>
-	 */
 	private static void handleRecordDonation() {
-		System.out.println("\n--- [FR2] Record Donation & Bag Unit ---");
-		System.out.print("Enter Donor ID (e.g., DNR-1001): ");
+		System.out.println("\n--- [FR2] Record Donation ---");
+		System.out.print("Enter Donor ID: ");
 		String donorId = scanner.nextLine().trim();
 
-		Optional<Donor> donorOpt = dataStore.findDonorById(donorId);
-		if (donorOpt.isEmpty()) {
-			System.out.println("[!] Donor not found. Please register donor first via Option 1.\n");
-			return;
-		}
+		Donor donor = dataStore.findDonorById(donorId)
+				.orElseThrow(() -> new IllegalArgumentException("Donor ID '" + donorId + "' not found in Map."));
 
-		Donor donor = donorOpt.get();
-		// Check eligibility rule before drawing donation
 		donor.validateEligibilityForDonation();
 
 		System.out.print("Enter Component Type (WHOLE_BLOOD / PRBC / PLATELETS / FFP): ");
@@ -165,62 +141,151 @@ public class BloodBankDonorManagementSystemApplication implements CommandLineRun
 
 		BloodUnit unit = new BloodUnit(donor.getDonorId(), donor.getBloodGroup(), component);
 		dataStore.addBloodUnit(unit);
-
-		// Update donor's last donation date to today
 		donor.setLastDonationDate(LocalDate.now());
 
-		System.out.println("\n[SUCCESS] Donation Logged and Bagged!");
-		System.out.println("-> Barcode: " + unit.getBarcode());
-		System.out.println("-> Blood Group: " + unit.getBloodGroup());
-		System.out.println("-> Component: " + unit.getComponentType());
-		System.out.println("-> Collection Date: " + unit.getCollectionDate());
-		System.out.println("-> Expiry Date: " + unit.getExpiryDate());
-		System.out.println("-> Status: " + unit.getStatus() + "\n");
+		System.out.println("\n[SUCCESS] Unit Bagged: " + unit.getBarcode() + " | Expiry: " + unit.getExpiryDate() + "\n");
 	}
 
-	/**
-	 * FR3: Compute Unit Expiry by Component Type
-	 * Displays all active units ordered by earliest expiry (FEFO using PriorityQueue)
-	 */
 	private static void handleComputeUnitExpiry() {
-		System.out.println("\n--- [FR3] Unit Expiry & Shelf-Life Tracker (FEFO Order) ---");
-		PriorityQueue<BloodUnit> queue = dataStore.getExpiryQueue();
+		System.out.println("\n--- [FR3] Sorted Inventory Expiry Report (FEFO Comparator) ---");
+		List<BloodUnit> sortedUnits = dataStore.getAvailableUnitsSortedByExpiry();
 
-		if (queue.isEmpty()) {
-			System.out.println("[INFO] Inventory is currently empty. Record a donation first.\n");
+		if (sortedUnits.isEmpty()) {
+			System.out.println("[INFO] No available units in inventory.\n");
 			return;
 		}
 
-		System.out.printf("%-10s | %-12s | %-10s | %-12s | %-12s | %-10s%n",
-				"BARCODE", "GROUP", "TYPE", "COLLECTED", "EXPIRY", "STATUS");
-		System.out.println("--------------------------------------------------------------------------");
-
-		// Polling from priority queue prints in exact FEFO (nearest expiry first) order
-		while (!queue.isEmpty()) {
-			BloodUnit u = queue.poll();
-			System.out.printf("%-10s | %-12s | %-10s | %-12s | %-12s | %-10s%n",
+		System.out.printf("%-10s | %-6s | %-12s | %-12s | %-12s | %-10s%n",
+				"BARCODE", "GROUP", "COMPONENT", "COLLECTED", "EXPIRY DATE", "STATUS");
+		System.out.println("-----------------------------------------------------------------------");
+		for (BloodUnit u : sortedUnits) {
+			System.out.printf("%-10s | %-6s | %-12s | %-12s | %-12s | %-10s%n",
 					u.getBarcode(), u.getBloodGroup(), u.getComponentType(),
 					u.getCollectionDate(), u.getExpiryDate(), u.getStatus());
 		}
 		System.out.println();
 	}
 
+	/**
+	 * FR4: Raise Hospital Blood Request (Stored in requestMap + prioritized list)
+	 */
 	private static void handleRaiseHospitalRequest() {
-		System.out.println("\n-> [FR4] Raise Hospital Blood Request stub invoked.\n");
+		System.out.println("\n--- [FR4] Raise Hospital Blood Request ---");
+		System.out.print("Enter Hospital Name: ");
+		String hospital = scanner.nextLine().trim();
+		System.out.print("Enter Required Blood Group (e.g., B+): ");
+		String bloodGroup = scanner.nextLine().trim().toUpperCase();
+		System.out.print("Enter Component Type (PRBC / FFP / PLATELETS): ");
+		String component = scanner.nextLine().trim().toUpperCase();
+		System.out.print("Enter Units Required: ");
+		int units = Integer.parseInt(scanner.nextLine().trim());
+		System.out.print("Enter Urgency Level (STAT / URGENT / ROUTINE): ");
+		String urgency = scanner.nextLine().trim().toUpperCase();
+
+		BloodRequest request = new BloodRequest(hospital, bloodGroup, component, units, urgency);
+		dataStore.addRequest(request);
+
+		System.out.println("\n[SUCCESS] Hospital Request Logged in Request Map!");
+		System.out.println("-> Request ID: " + request.getRequestId());
+		System.out.println("-> Urgency: " + request.getUrgency() + " (Priority Triage Ranked)");
+		System.out.println("-> Status: " + request.getStatus() + "\n");
 	}
 
+	/**
+	 * FR5: Suggest Compatible Units (FEFO Order using Strategy Pattern)
+	 */
 	private static void handleSuggestCompatibleUnits() {
-		System.out.println("\n-> [FR5] Suggest Compatible Units (Strategy Pattern)");
-		CompatibilityStrategy rbcStrategy = new RedBloodCellCompatibilityStrategy();
-		CompatibilityStrategy plasmaStrategy = new PlasmaCompatibilityStrategy();
-		String group = "B+";
-		System.out.println("Target: " + group);
-		System.out.println("Compatible RBC Donors: " + rbcStrategy.getCompatibleDonorGroups(group));
-		System.out.println("Compatible Plasma Donors: " + plasmaStrategy.getCompatibleDonorGroups(group) + "\n");
+		System.out.println("\n--- [FR5] Suggest Compatible Units (FEFO Ordered) ---");
+		System.out.print("Enter Request ID (or press Enter to view top priority request): ");
+		String reqId = scanner.nextLine().trim();
+
+		BloodRequest targetRequest;
+		if (reqId.isEmpty()) {
+			List<BloodRequest> priorityList = dataStore.getRequestsSortedByPriority();
+			if (priorityList.isEmpty()) {
+				System.out.println("[INFO] No pending hospital requests found. Please raise one via Option 4.\n");
+				return;
+			}
+			targetRequest = priorityList.get(0);
+			System.out.println("Loaded highest priority pending request: " + targetRequest.getRequestId() + " (" + targetRequest.getHospitalName() + ")");
+		} else {
+			targetRequest = dataStore.findRequestById(reqId)
+					.orElseThrow(() -> new IllegalArgumentException("Request ID '" + reqId + "' not found in Map."));
+		}
+
+		CompatibilityStrategy strategy = "FFP".equalsIgnoreCase(targetRequest.getComponentType())
+				? new PlasmaCompatibilityStrategy()
+				: new RedBloodCellCompatibilityStrategy();
+
+		Set<String> compatibleGroups = strategy.getCompatibleDonorGroups(targetRequest.getBloodGroup());
+		System.out.println("Recipient Group: " + targetRequest.getBloodGroup() + " | Component: " + targetRequest.getComponentType());
+		System.out.println("Compatible Donor Groups: " + compatibleGroups);
+
+		// Filter and sort available units according to FEFO
+		List<BloodUnit> suggestions = dataStore.getAvailableUnitsSortedByExpiry().stream()
+				.filter(u -> u.getComponentType().equalsIgnoreCase(targetRequest.getComponentType()))
+				.filter(u -> compatibleGroups.contains(u.getBloodGroup()))
+				.toList();
+
+		if (suggestions.isEmpty()) {
+			System.out.println("\n[ALERT] No compatible units currently available in inventory!\n");
+			return;
+		}
+
+		System.out.println("\nMatching Compatible Units (FEFO Sorted):");
+		System.out.printf("%-10s | %-6s | %-12s | %-12s%n", "BARCODE", "GROUP", "EXPIRY", "STATUS");
+		System.out.println("--------------------------------------------------");
+		for (BloodUnit unit : suggestions) {
+			System.out.printf("%-10s | %-6s | %-12s | %-10s%n",
+					unit.getBarcode(), unit.getBloodGroup(), unit.getExpiryDate(), unit.getStatus());
+		}
+		System.out.println();
 	}
 
+	/**
+	 * FR6: Issue Units Against Request (O(1) Map update + status mutation)
+	 */
 	private static void handleIssueUnits() {
-		System.out.println("\n-> [FR6] Issue Units Against Request stub invoked.\n");
+		System.out.println("\n--- [FR6] Issue Units Against Hospital Request ---");
+		System.out.print("Enter Request ID: ");
+		String reqId = scanner.nextLine().trim();
+
+		BloodRequest request = dataStore.findRequestById(reqId)
+				.orElseThrow(() -> new IllegalArgumentException("Request ID '" + reqId + "' not found in Map."));
+
+		if (!"PENDING".equalsIgnoreCase(request.getStatus())) {
+			System.out.println("[!] Request is already " + request.getStatus() + ". Cannot issue units.\n");
+			return;
+		}
+
+		System.out.print("Enter Blood Unit Barcode to issue: ");
+		String barcode = scanner.nextLine().trim();
+
+		BloodUnit unit = dataStore.findUnitByBarcode(barcode)
+				.orElseThrow(() -> new IllegalArgumentException("Barcode '" + barcode + "' not found in Inventory Map."));
+
+		if (!"AVAILABLE".equalsIgnoreCase(unit.getStatus())) {
+			System.out.println("[!] Unit " + unit.getBarcode() + " is currently " + unit.getStatus() + ". Cannot issue.\n");
+			return;
+		}
+
+		// Verify compatibility before issuing
+		CompatibilityStrategy strategy = "FFP".equalsIgnoreCase(request.getComponentType())
+				? new PlasmaCompatibilityStrategy()
+				: new RedBloodCellCompatibilityStrategy();
+
+		if (!strategy.getCompatibleDonorGroups(request.getBloodGroup()).contains(unit.getBloodGroup())) {
+			throw new IncompatibleBloodUnitException(unit.getBloodGroup(), request.getBloodGroup());
+		}
+
+		// Update states
+		unit.setStatus("ISSUED");
+		request.setStatus("FULFILLED");
+
+		System.out.println("\n[SUCCESS] Unit Dispatched Successfully!");
+		System.out.println("-> Issued Unit: " + unit.getBarcode() + " (" + unit.getBloodGroup() + " " + unit.getComponentType() + ")");
+		System.out.println("-> Hospital: " + request.getHospitalName());
+		System.out.println("-> Request ID: " + request.getRequestId() + " status updated to FULFILLED.\n");
 	}
 
 	private static void handleFlagExpiringUnits() {

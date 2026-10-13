@@ -1,5 +1,7 @@
 package com.bloodbank.bloodbankdonormanagementsystem.repository;
 
+import com.bloodbank.bloodbankdonormanagementsystem.comparator.BloodRequestPriorityComparator;
+import com.bloodbank.bloodbankdonormanagementsystem.comparator.BloodUnitExpiryComparator;
 import com.bloodbank.bloodbankdonormanagementsystem.model.BloodRequest;
 import com.bloodbank.bloodbankdonormanagementsystem.model.BloodUnit;
 import com.bloodbank.bloodbankdonormanagementsystem.model.Donor;
@@ -9,72 +11,74 @@ import java.util.*;
 public class BloodBankDataStore {
 
     /**
-     * COLLECTION CHOICE JUSTIFICATION:
-     * 1. Set<Donor> (LinkedHashSet):
-     *    - A donor must be unique based on donorId/phone (equals & hashCode guarantee no duplicates).
-     *    - LinkedHashSet provides O(1) duplicate prevention while preserving registration order.
+     * MAP UPGRADES FOR O(1) LOOKUPS:
+     * - donorMap: Lookup donor by donorId in O(1) time.
+     * - inventoryMap: Lookup individual unit by barcode in O(1) time.
+     * - requestMap: Lookup hospital request by requestId in O(1) time.
      */
-    private final Set<Donor> donorRegistry = new LinkedHashSet<>();
+    private final Map<String, Donor> donorMap = new HashMap<>();
+    private final Map<String, BloodUnit> inventoryMap = new HashMap<>();
+    private final Map<String, BloodRequest> requestMap = new HashMap<>();
 
-    /**
-     * COLLECTION CHOICE JUSTIFICATION:
-     * 2. List<BloodUnit> (ArrayList):
-     *    - Blood units represent indexed physical inventory bags collected chronologically.
-     *    - ArrayList provides fast O(1) index lookups, efficient iteration, and dynamic appending.
-     */
-    private final List<BloodUnit> inventory = new ArrayList<>();
+    // Priority Queues for ordering
+    private final PriorityQueue<BloodUnit> expiryQueue = new PriorityQueue<>(new BloodUnitExpiryComparator());
+    private final PriorityQueue<BloodRequest> prioritizedRequests = new PriorityQueue<>(new BloodRequestPriorityComparator());
 
-    /**
-     * COLLECTION CHOICE JUSTIFICATION:
-     * 3. PriorityQueue<BloodUnit> (FEFO / Expiry Queue):
-     *    - Critical for FR3 & FR5: First-Expiring, First-Out (FEFO) dispensing policy.
-     *    - Min-Heap ordered by BloodUnit::getExpiryDate delivers O(1) retrieval of the nearest-to-expire unit.
-     */
-    private final PriorityQueue<BloodUnit> expiryQueue = new PriorityQueue<>(
-            Comparator.comparing(BloodUnit::getExpiryDate)
-    );
-
-    /**
-     * COLLECTION CHOICE JUSTIFICATION:
-     * 4. Queue<BloodRequest> (LinkedList / FIFO):
-     *    - Hospital blood requests arrive in real time and are processed in arrival order (FIFO).
-     */
-    private final Queue<BloodRequest> hospitalRequestQueue = new LinkedList<>();
-
-    // --- Accessor and Mutation Methods ---
-
+    // --- Donor Operations ---
     public boolean addDonor(Donor donor) {
-        return donorRegistry.add(donor);
+        if (donorMap.containsKey(donor.getDonorId())) {
+            return false;
+        }
+        donorMap.put(donor.getDonorId(), donor);
+        return true;
     }
 
     public Optional<Donor> findDonorById(String donorId) {
-        return donorRegistry.stream()
-                .filter(d -> d.getDonorId().equalsIgnoreCase(donorId.trim()))
-                .findFirst();
+        return Optional.ofNullable(donorMap.get(donorId.trim().toUpperCase()));
     }
 
-    public Set<Donor> getAllDonors() {
-        return Collections.unmodifiableSet(donorRegistry);
+    public Map<String, Donor> getDonorMap() {
+        return Collections.unmodifiableMap(donorMap);
     }
 
+    // --- Blood Unit Operations ---
     public void addBloodUnit(BloodUnit unit) {
-        inventory.add(unit);
+        inventoryMap.put(unit.getBarcode(), unit);
         expiryQueue.offer(unit);
     }
 
-    public List<BloodUnit> getAllInventory() {
-        return Collections.unmodifiableList(inventory);
+    public Optional<BloodUnit> findUnitByBarcode(String barcode) {
+        return Optional.ofNullable(inventoryMap.get(barcode.trim().toUpperCase()));
     }
 
-    public PriorityQueue<BloodUnit> getExpiryQueue() {
-        return new PriorityQueue<>(expiryQueue); // defensive copy
+    public Collection<BloodUnit> getAllUnits() {
+        return Collections.unmodifiableCollection(inventoryMap.values());
     }
 
+    public List<BloodUnit> getAvailableUnitsSortedByExpiry() {
+        List<BloodUnit> available = new ArrayList<>();
+        for (BloodUnit unit : inventoryMap.values()) {
+            if ("AVAILABLE".equalsIgnoreCase(unit.getStatus())) {
+                available.add(unit);
+            }
+        }
+        available.sort(new BloodUnitExpiryComparator());
+        return available;
+    }
+
+    // --- Request Operations ---
     public void addRequest(BloodRequest request) {
-        hospitalRequestQueue.offer(request);
+        requestMap.put(request.getRequestId(), request);
+        prioritizedRequests.offer(request);
     }
 
-    public Queue<BloodRequest> getHospitalRequestQueue() {
-        return hospitalRequestQueue;
+    public Optional<BloodRequest> findRequestById(String requestId) {
+        return Optional.ofNullable(requestMap.get(requestId.trim().toUpperCase()));
+    }
+
+    public List<BloodRequest> getRequestsSortedByPriority() {
+        List<BloodRequest> requests = new ArrayList<>(requestMap.values());
+        requests.sort(new BloodRequestPriorityComparator());
+        return requests;
     }
 }
