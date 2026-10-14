@@ -1,0 +1,6 @@
+donorId,bloodGroup,componentType,collectionDaysAgo
+DNR-1001,O+,PRBC,10
+DNR-1002,A+,PLATELETS,3
+DNR-1004,AB-,FFP,60
+DNR-1005,O-,PRBC,15
+DNR-1005,O-,WHOLE_BLOOD,5

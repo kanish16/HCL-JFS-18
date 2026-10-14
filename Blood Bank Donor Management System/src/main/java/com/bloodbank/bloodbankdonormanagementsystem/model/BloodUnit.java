@@ -4,7 +4,7 @@ import com.bloodbank.bloodbankdonormanagementsystem.BloodBankConstants;
 import java.time.LocalDate;
 import java.util.Objects;
 
-public class BloodUnit {
+public class BloodUnit extends BaseEntity {
     private static int unitCounter = 5000;
 
     private final String barcode;
@@ -15,14 +15,16 @@ public class BloodUnit {
     private final LocalDate expiryDate;
     private String status; // AVAILABLE, RESERVED, ISSUED, EXPIRED
 
-    // Chained Constructor 1 (Collection date defaults to today)
+    // Chained Constructor 1 (Defaults collection date to today)
     public BloodUnit(String donorId, String bloodGroup, String componentType) {
         this(donorId, bloodGroup, componentType, LocalDate.now());
     }
 
-    // Chained Constructor 2 (Computes expiry from shelf-life constants)
+    // Primary Constructor 2
     public BloodUnit(String donorId, String bloodGroup, String componentType, LocalDate collectionDate) {
-        this.barcode = "UNT-" + (++unitCounter);
+        super("UNT-" + (++unitCounter));
+
+        this.barcode = getId();
         this.donorId = Objects.requireNonNull(donorId, "Donor ID cannot be null");
         this.bloodGroup = Objects.requireNonNull(bloodGroup, "Blood group cannot be null");
         this.componentType = Objects.requireNonNull(componentType, "Component type cannot be null");
@@ -31,7 +33,6 @@ public class BloodUnit {
         this.status = "AVAILABLE";
     }
 
-    // FR3: Expiry computation rules
     private static LocalDate calculateExpiry(String componentType, LocalDate collectionDate) {
         return switch (componentType.toUpperCase()) {
             case "PLATELETS" -> collectionDate.plusDays(BloodBankConstants.SHELF_LIFE_PLATELETS_DAYS);
@@ -41,13 +42,11 @@ public class BloodUnit {
         };
     }
 
-    // FR7: Check if unit expires within the next N days
     public boolean isExpiringWithin(int days) {
         LocalDate threshold = LocalDate.now().plusDays(days);
         return !expiryDate.isBefore(LocalDate.now()) && !expiryDate.isAfter(threshold);
     }
 
-    // Getters and Setters
     public String getBarcode() { return barcode; }
     public String getDonorId() { return donorId; }
     public String getBloodGroup() { return bloodGroup; }

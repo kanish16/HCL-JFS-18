@@ -3,7 +3,7 @@ package com.bloodbank.bloodbankdonormanagementsystem.model;
 import java.time.LocalDateTime;
 import java.util.Objects;
 
-public class BloodRequest {
+public class BloodRequest extends BaseEntity {
     private static int requestCounter = 7000;
 
     private final String requestId;
@@ -15,13 +15,15 @@ public class BloodRequest {
     private final LocalDateTime requestedAt;
     private String status;        // PENDING, FULFILLED, CANCELLED
 
-    // Chained Constructor 1 (Defaults to ROUTINE)
+    // Chained Constructor 1 (Defaults urgency to ROUTINE)
     public BloodRequest(String hospitalName, String bloodGroup, String componentType, int unitsRequired) {
         this(hospitalName, bloodGroup, componentType, unitsRequired, "ROUTINE");
     }
 
-    // Chained Constructor 2 (Full parameters with validations)
+    // Primary Constructor 2
     public BloodRequest(String hospitalName, String bloodGroup, String componentType, int unitsRequired, String urgency) {
+        super("REQ-" + (++requestCounter));
+
         if (hospitalName == null || hospitalName.trim().isEmpty()) {
             throw new IllegalArgumentException("Hospital name cannot be blank");
         }
@@ -29,7 +31,7 @@ public class BloodRequest {
             throw new IllegalArgumentException("Units required must be greater than 0");
         }
 
-        this.requestId = "REQ-" + (++requestCounter);
+        this.requestId = getId();
         this.hospitalName = hospitalName.trim();
         this.bloodGroup = Objects.requireNonNull(bloodGroup, "Blood group cannot be null");
         this.componentType = Objects.requireNonNull(componentType, "Component type cannot be null");
@@ -39,12 +41,10 @@ public class BloodRequest {
         this.status = "PENDING";
     }
 
-    // NFR-P3: Urgent priority flag
     public boolean isHighPriority() {
         return "STAT".equalsIgnoreCase(this.urgency) || "URGENT".equalsIgnoreCase(this.urgency);
     }
 
-    // Getters and Setters
     public String getRequestId() { return requestId; }
     public String getHospitalName() { return hospitalName; }
     public String getBloodGroup() { return bloodGroup; }

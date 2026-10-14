@@ -6,9 +6,12 @@ import com.bloodbank.bloodbankdonormanagementsystem.model.BloodRequest;
 import com.bloodbank.bloodbankdonormanagementsystem.model.BloodUnit;
 import com.bloodbank.bloodbankdonormanagementsystem.model.Donor;
 import com.bloodbank.bloodbankdonormanagementsystem.repository.BloodBankDataStore;
+import com.bloodbank.bloodbankdonormanagementsystem.repository.CrudRepository;
+import com.bloodbank.bloodbankdonormanagementsystem.repository.InMemoryRepository;
 import com.bloodbank.bloodbankdonormanagementsystem.strategy.CompatibilityStrategy;
 import com.bloodbank.bloodbankdonormanagementsystem.strategy.PlasmaCompatibilityStrategy;
 import com.bloodbank.bloodbankdonormanagementsystem.strategy.RedBloodCellCompatibilityStrategy;
+import com.bloodbank.bloodbankdonormanagementsystem.util.CsvDataLoader;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -29,10 +32,16 @@ public class BloodBankDonorManagementSystemApplication implements CommandLineRun
 	@Override
 	public void run(String... args) {
 		scanner = new Scanner(System.in);
-		seedInitialData(); // Preload sample data for quick testing
+
+		// --- Load CSV Seed Data via Generic Repositories ---
+		System.out.println("\n--- Seeding Initial Data from CSV ---");
+		CsvDataLoader.loadDonorsFromCsv("data/donors.csv", donorRepository);
+		CsvDataLoader.loadBloodUnitsFromCsv("data/blood_units.csv", bloodUnitRepository);
+		System.out.println("Active Donors count: " + donorRepository.count());
+		System.out.println("Active Inventory count: " + bloodUnitRepository.count() + "\n");
 
 		boolean running = true;
-		System.out.println("\n=================================================");
+		System.out.println("=================================================");
 		System.out.println("  BLOOD BANK & DONOR MANAGEMENT SYSTEM (JFS-18)  ");
 		System.out.println("=================================================");
 
@@ -78,7 +87,6 @@ public class BloodBankDonorManagementSystemApplication implements CommandLineRun
 
 		} while (running);
 	}
-
 	private static void seedInitialData() {
 		Donor d1 = new Donor("Vikram Anand", 29, 68.0, "O-", "9876543210");
 		Donor d2 = new Donor("Priya Ramesh", 26, 54.0, "B+", "9123456780");
@@ -295,4 +303,15 @@ public class BloodBankDonorManagementSystemApplication implements CommandLineRun
 	private static void handleViewStockDashboard() {
 		System.out.println("\n-> [FR8] Stock Dashboard stub invoked.\n");
 	}
+
+	// Strictly typed generic repository instantiations (Zero Raw Types / Warnings)
+	private static final CrudRepository<Donor, String> donorRepository =
+			new InMemoryRepository<>(Donor::getDonorId);
+
+	private static final CrudRepository<BloodUnit, String> bloodUnitRepository =
+			new InMemoryRepository<>(BloodUnit::getBarcode);
+
+	private static final CrudRepository<BloodRequest, String> bloodRequestRepository =
+			new InMemoryRepository<>(BloodRequest::getRequestId);
+
 }

@@ -2,13 +2,10 @@ package com.bloodbank.bloodbankdonormanagementsystem.model;
 
 import com.bloodbank.bloodbankdonormanagementsystem.BloodBankConstants;
 import com.bloodbank.bloodbankdonormanagementsystem.exception.DonorIneligibleException;
-import com.bloodbank.bloodbankdonormanagementsystem.exception.IncompatibleBloodUnitException;
-import com.bloodbank.bloodbankdonormanagementsystem.strategy.CompatibilityStrategy;
-
 import java.time.LocalDate;
 import java.util.Objects;
 
-public class Donor {
+public class Donor extends BaseEntity {
     private static int idCounter = 1000;
 
     private final String donorId;
@@ -24,30 +21,10 @@ public class Donor {
         this(name, age, weightKg, bloodGroup, phone, null);
     }
 
-    public static void validateCompatibility(CompatibilityStrategy strategy, String donorGroup, String recipientGroup) {
-        if (!strategy.getCompatibleDonorGroups(recipientGroup).contains(donorGroup)) {
-            throw new IncompatibleBloodUnitException(donorGroup, recipientGroup);
-        }
-    }
-
-    public void validateEligibilityForDonation() {
-        if (this.getAge() < BloodBankConstants.MIN_DONOR_AGE || this.getAge() > BloodBankConstants.MAX_DONOR_AGE) {
-            throw new DonorIneligibleException(
-                    "Donor ineligible: Age must be between " + BloodBankConstants.MIN_DONOR_AGE
-                            + " and " + BloodBankConstants.MAX_DONOR_AGE + " years.", null);
-        }
-        if (this.getWeightKg() < BloodBankConstants.MIN_DONOR_WEIGHT_KG) {
-            throw new DonorIneligibleException(
-                    "Donor ineligible: Weight must be at least " + BloodBankConstants.MIN_DONOR_WEIGHT_KG + " kg.", null);
-        }
-        if (!this.isEligibleToDonate()) {
-            throw new DonorIneligibleException(
-                    "Donor is in cooling period until " + this.getNextEligibleDate(), this.getNextEligibleDate());
-        }
-    }
-
-    // Chained Constructor 2 (Full parameters with validations)
+    // Primary Constructor 2
     public Donor(String name, int age, double weightKg, String bloodGroup, String phone, LocalDate lastDonationDate) {
+        super("DNR-" + (++idCounter));
+
         if (name == null || name.trim().isEmpty()) {
             throw new IllegalArgumentException("Donor name cannot be blank");
         }
@@ -63,7 +40,7 @@ public class Donor {
             throw new IllegalArgumentException("Phone number cannot be blank");
         }
 
-        this.donorId = "DNR-" + (++idCounter);
+        this.donorId = getId();
         this.name = name.trim();
         this.age = age;
         this.weightKg = weightKg;
@@ -72,7 +49,22 @@ public class Donor {
         this.lastDonationDate = lastDonationDate;
     }
 
-    // FR1: Business logic for eligibility cooldown (90 days)
+    public void validateEligibilityForDonation() {
+        if (this.age < BloodBankConstants.MIN_DONOR_AGE || this.age > BloodBankConstants.MAX_DONOR_AGE) {
+            throw new DonorIneligibleException(
+                    "Donor age must be between " + BloodBankConstants.MIN_DONOR_AGE
+                            + " and " + BloodBankConstants.MAX_DONOR_AGE + " years.", null);
+        }
+        if (this.weightKg < BloodBankConstants.MIN_DONOR_WEIGHT_KG) {
+            throw new DonorIneligibleException(
+                    "Donor weight must be at least " + BloodBankConstants.MIN_DONOR_WEIGHT_KG + " kg.", null);
+        }
+        if (!isEligibleToDonate()) {
+            throw new DonorIneligibleException(
+                    "Donor is in cooling period until " + getNextEligibleDate(), getNextEligibleDate());
+        }
+    }
+
     public boolean isEligibleToDonate() {
         if (lastDonationDate == null) {
             return true;
@@ -88,7 +80,6 @@ public class Donor {
         return lastDonationDate.plusDays(BloodBankConstants.WHOLE_BLOOD_COOLDOWN_DAYS);
     }
 
-    // Getters and Setters
     public String getDonorId() { return donorId; }
     public String getName() { return name; }
     public void setName(String name) { this.name = Objects.requireNonNull(name, "Name cannot be null"); }
