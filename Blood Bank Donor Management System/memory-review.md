@@ -29,4 +29,4 @@
 
 ### Target Method: `Donor.validateEligibilityForDonation()`
 
-![img.png](Heap Memory Trace.png)
+![img.png](Heap%20Memory%20Trace.png)
