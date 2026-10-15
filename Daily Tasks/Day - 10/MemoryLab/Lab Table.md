@@ -1,4 +1,4 @@
-# Day 10: JVM Memory Internals & Memory Management
+# Day 10: Memory Management
 
 ## MemoryLab Experimental Results
 
@@ -14,3 +14,4 @@
 * GC Activity Logging      | -Xlog:gc               | 33 Young GCs, Full GCs    | G1 Evacuation pauses visible
 * OutOfMemoryError         | -Xmx64m                | Caught, freed to 1 MB     | Clean exit code 0
 * -----------------------------------------------------------------------------------------------------------------
+
