@@ -4,6 +4,7 @@ import com.bloodbank.bloodbankdonormanagementsystem.exception.DonorIneligibleExc
 import com.bloodbank.bloodbankdonormanagementsystem.exception.IncompatibleBloodUnitException;
 import com.bloodbank.bloodbankdonormanagementsystem.model.BloodRequest;
 import com.bloodbank.bloodbankdonormanagementsystem.model.BloodUnit;
+import com.bloodbank.bloodbankdonormanagementsystem.model.DonationCamp;
 import com.bloodbank.bloodbankdonormanagementsystem.model.Donor;
 import com.bloodbank.bloodbankdonormanagementsystem.repository.BloodBankDataStore;
 import com.bloodbank.bloodbankdonormanagementsystem.repository.CrudRepository;
@@ -18,6 +19,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 import java.time.LocalDate;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @SpringBootApplication
 public class BloodBankDonorManagementSystemApplication implements CommandLineRunner {
@@ -296,12 +298,77 @@ public class BloodBankDonorManagementSystemApplication implements CommandLineRun
 		System.out.println("-> Request ID: " + request.getRequestId() + " status updated to FULFILLED.\n");
 	}
 
+	/**
+	 * FR7: View Expiry Alerts (Expiring in 3 Days)
+	 */
 	private static void handleFlagExpiringUnits() {
-		System.out.println("\n-> [FR7] Expiry Alert stub invoked.\n");
+		System.out.println("\n--- [FR7] Expiry Alert Tracker (Next 3 Days) ---");
+		LocalDate today = LocalDate.now();
+		LocalDate alertThreshold = today.plusDays(3);
+
+		List<BloodUnit> expiringUnits = bloodUnitRepository.findAll().stream()
+				.filter(u -> "AVAILABLE".equalsIgnoreCase(u.getStatus()))
+				.filter(u -> !u.getExpiryDate().isBefore(today) && !u.getExpiryDate().isAfter(alertThreshold))
+				.sorted(Comparator.comparing(BloodUnit::getExpiryDate))
+				.toList();
+
+		if (expiringUnits.isEmpty()) {
+			System.out.println("[INFO] No units are nearing expiration within the next 3 days.\n");
+			return;
+		}
+
+		System.out.println("[CRITICAL ALERT] The following units expire soon and must be prioritized (FEFO):");
+		System.out.printf("%-10s | %-6s | %-12s | %-12s | %-15s%n",
+				"BARCODE", "GROUP", "COMPONENT", "EXPIRY", "DAYS REMAINING");
+		System.out.println("------------------------------------------------------------------");
+
+		for (BloodUnit unit : expiringUnits) {
+			long daysLeft = java.time.temporal.ChronoUnit.DAYS.between(today, unit.getExpiryDate());
+			System.out.printf("%-10s | %-6s | %-12s | %-12s | %d day(s)%n",
+					unit.getBarcode(), unit.getBloodGroup(), unit.getComponentType(),
+					unit.getExpiryDate(), daysLeft);
+		}
+		System.out.println();
 	}
 
+	/**
+	 * FR8: View Stock Dashboard by Blood Group
+	 */
 	private static void handleViewStockDashboard() {
-		System.out.println("\n-> [FR8] Stock Dashboard stub invoked.\n");
+		System.out.println("\n--- [FR8] Blood Stock Dashboard Summary ---");
+		List<BloodUnit> allUnits = bloodUnitRepository.findAll();
+
+		if (allUnits.isEmpty()) {
+			System.out.println("[INFO] Stock is completely empty.\n");
+			return;
+		}
+
+		// Aggregate counts by blood group for AVAILABLE units
+		Map<String, Long> stockByGroup = allUnits.stream()
+				.filter(u -> "AVAILABLE".equalsIgnoreCase(u.getStatus()))
+				.collect(Collectors.groupingBy(BloodUnit::getBloodGroup, Collectors.counting()));
+
+		// Aggregate counts by component type
+		Map<String, Long> stockByComponent = allUnits.stream()
+				.filter(u -> "AVAILABLE".equalsIgnoreCase(u.getStatus()))
+				.collect(Collectors.groupingBy(BloodUnit::getComponentType, Collectors.counting()));
+
+		long totalAvailable = stockByGroup.values().stream().mapToLong(Long::longValue).sum();
+
+		System.out.println("AVAILABLE UNITS BY BLOOD GROUP:");
+		System.out.printf("%-12s | %-8s%n", "BLOOD GROUP", "UNITS");
+		System.out.println("-------------------------");
+		String[] groups = {"A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"};
+		for (String bg : groups) {
+			System.out.printf("%-12s | %-8d%n", bg, stockByGroup.getOrDefault(bg, 0L));
+		}
+
+		System.out.println("\nAVAILABLE UNITS BY COMPONENT TYPE:");
+		stockByComponent.forEach((comp, count) -> System.out.printf("%-12s : %d unit(s)%n", comp, count));
+
+		System.out.println("-------------------------");
+		System.out.println("Total Available Stock: " + totalAvailable + " unit(s)");
+		System.out.println("Total Registered Donors: " + donorRepository.count() + "\n");
 	}
 
 	// Strictly typed generic repository instantiations (Zero Raw Types / Warnings)
@@ -313,5 +380,8 @@ public class BloodBankDonorManagementSystemApplication implements CommandLineRun
 
 	private static final CrudRepository<BloodRequest, String> bloodRequestRepository =
 			new InMemoryRepository<>(BloodRequest::getRequestId);
+
+	private static final CrudRepository<DonationCamp, String> donationCampRepository =
+			new InMemoryRepository<>(DonationCamp::getCampId);
 
 }
