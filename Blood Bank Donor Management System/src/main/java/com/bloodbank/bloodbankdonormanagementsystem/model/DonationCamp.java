@@ -2,6 +2,7 @@ package com.bloodbank.bloodbankdonormanagementsystem.model;
 
 import java.time.LocalDate;
 import java.util.Objects;
+import java.util.Optional;
 
 public class DonationCamp extends BaseEntity {
     private static int campCounter = 9000;
@@ -13,6 +14,8 @@ public class DonationCamp extends BaseEntity {
     private int estimatedDonors;
     private int unitsCollected;
     private String status; // UPCOMING, ACTIVE, CONCLUDED
+    private java.time.LocalTime startTime;
+    private java.time.LocalTime endTime;
 
     public DonationCamp(String campName, String venue, LocalDate campDate, int estimatedDonors) {
         super("CMP-" + (++campCounter));
@@ -49,6 +52,8 @@ public class DonationCamp extends BaseEntity {
     public void setUnitsCollected(int unitsCollected) { this.unitsCollected = unitsCollected; }
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
+    public Optional<java.time.LocalTime> getStartTime() { return Optional.ofNullable(startTime); }
+    public Optional<java.time.LocalTime> getEndTime() { return Optional.ofNullable(endTime); }
 
     @Override
     public boolean equals(Object o) {

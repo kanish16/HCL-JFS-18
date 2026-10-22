@@ -2,6 +2,7 @@ package com.bloodbank.bloodbankdonormanagementsystem.model;
 
 import java.time.LocalDateTime;
 import java.util.Objects;
+import java.util.Optional;
 
 public class BloodRequest extends BaseEntity {
     private static int requestCounter = 7000;
@@ -14,6 +15,7 @@ public class BloodRequest extends BaseEntity {
     private final String urgency; // ROUTINE, URGENT, STAT
     private final LocalDateTime requestedAt;
     private String status;        // PENDING, FULFILLED, CANCELLED
+    private LocalDateTime requiredBy;
 
     // Chained Constructor 1 (Defaults urgency to ROUTINE)
     public BloodRequest(String hospitalName, String bloodGroup, String componentType, int unitsRequired) {
@@ -54,7 +56,8 @@ public class BloodRequest extends BaseEntity {
     public LocalDateTime getRequestedAt() { return requestedAt; }
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = Objects.requireNonNull(status, "Status cannot be null"); }
-
+    public Optional<LocalDateTime> getRequiredBy() { return Optional.ofNullable(requiredBy); }
+    public void setRequiredBy(LocalDateTime requiredBy) { this.requiredBy = requiredBy; }
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;

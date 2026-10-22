@@ -4,6 +4,7 @@ import com.bloodbank.bloodbankdonormanagementsystem.BloodBankConstants;
 import com.bloodbank.bloodbankdonormanagementsystem.exception.DonorIneligibleException;
 import java.time.LocalDate;
 import java.util.Objects;
+import java.util.Optional;
 
 public class Donor extends BaseEntity {
     private static int idCounter = 1000;
@@ -91,7 +92,10 @@ public class Donor extends BaseEntity {
     public void setBloodGroup(String bloodGroup) { this.bloodGroup = Objects.requireNonNull(bloodGroup, "Blood group cannot be null"); }
     public String getPhone() { return phone; }
     public void setPhone(String phone) { this.phone = Objects.requireNonNull(phone, "Phone cannot be null"); }
-    public LocalDate getLastDonationDate() { return lastDonationDate; }
+
+    public Optional<LocalDate> getLastDonationDate() {
+        return Optional.ofNullable(lastDonationDate);
+    }
     public void setLastDonationDate(LocalDate lastDonationDate) { this.lastDonationDate = lastDonationDate; }
 
     @Override

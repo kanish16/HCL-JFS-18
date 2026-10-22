@@ -4,14 +4,6 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 
-/**
- * Generic In-Memory Repository backed by ConcurrentHashMap.
- * Reused for all entities (Donor, BloodUnit, BloodRequest, AppUser).
- * Zero raw types and zero unchecked warnings.
- *
- * @param <T>  The entity type
- * @param <ID> The entity ID type
- */
 public class InMemoryRepository<T, ID> implements CrudRepository<T, ID> {
 
     private final Map<ID, T> storage = new ConcurrentHashMap<>();
@@ -23,9 +15,9 @@ public class InMemoryRepository<T, ID> implements CrudRepository<T, ID> {
 
     @Override
     public T save(T entity) {
-        Objects.requireNonNull(entity, "Entity to save cannot be null");
+        Objects.requireNonNull(entity, "Entity cannot be null");
         ID id = idExtractor.apply(entity);
-        Objects.requireNonNull(id, "Extracted entity ID cannot be null");
+        Objects.requireNonNull(id, "Entity ID cannot be null");
         storage.put(id, entity);
         return entity;
     }
@@ -45,10 +37,7 @@ public class InMemoryRepository<T, ID> implements CrudRepository<T, ID> {
 
     @Override
     public boolean existsById(ID id) {
-        if (id == null) {
-            return false;
-        }
-        return storage.containsKey(id);
+        return id != null && storage.containsKey(id);
     }
 
     @Override
@@ -58,9 +47,6 @@ public class InMemoryRepository<T, ID> implements CrudRepository<T, ID> {
 
     @Override
     public boolean deleteById(ID id) {
-        if (id == null) {
-            return false;
-        }
-        return storage.remove(id) != null;
+        return id != null && storage.remove(id) != null;
     }
 }
