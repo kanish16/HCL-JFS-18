@@ -9,6 +9,7 @@ import com.bloodbank.bloodbankdonormanagementsystem.model.DonationCamp;
 import com.bloodbank.bloodbankdonormanagementsystem.model.Donor;
 import com.bloodbank.bloodbankdonormanagementsystem.repository.CrudRepository;
 import com.bloodbank.bloodbankdonormanagementsystem.repository.InMemoryRepository;
+import com.bloodbank.bloodbankdonormanagementsystem.service.BloodBankReportingService;
 import com.bloodbank.bloodbankdonormanagementsystem.strategy.CompatibilityStrategy;
 import com.bloodbank.bloodbankdonormanagementsystem.util.CsvDataLoader;
 import org.springframework.boot.CommandLineRunner;
@@ -36,6 +37,8 @@ public class BloodBankDonorManagementSystemApplication implements CommandLineRun
 	private static final CrudRepository<DonationCamp, String> donationCampRepository =
 			new InMemoryRepository<>(DonationCamp::getCampId);
 
+	private static BloodBankReportingService reportingService;
+
 	private static Scanner scanner;
 
 	public static void main(String[] args) {
@@ -50,6 +53,7 @@ public class BloodBankDonorManagementSystemApplication implements CommandLineRun
 		System.out.println("\n--- Seeding Initial Data from CSV ---");
 		CsvDataLoader.loadDonorsFromCsv("data/donors.csv", donorRepository);
 		CsvDataLoader.loadBloodUnitsFromCsv("data/blood_units.csv", bloodUnitRepository);
+		reportingService = new BloodBankReportingService(donorRepository, bloodUnitRepository, bloodRequestRepository);
 		System.out.println("Active Donors count: " + donorRepository.count());
 		System.out.println("Active Inventory count: " + bloodUnitRepository.count() + "\n");
 
@@ -159,29 +163,8 @@ public class BloodBankDonorManagementSystemApplication implements CommandLineRun
 	}
 
 	private static void handleComputeUnitExpiry() {
-		System.out.println("\n--- [FR3] Sorted Inventory Expiry Report (FEFO Comparator) ---");
-		List<BloodUnit> units = bloodUnitRepository.findAll().stream()
-				.filter(u -> "AVAILABLE".equalsIgnoreCase(u.getStatus()))
-				.sorted(Comparator.comparing(BloodUnit::getExpiryDate)
-						.thenComparing(BloodUnit::getCollectionDate))
-				.toList();
-
-		if (units.isEmpty()) {
-			System.out.println("[INFO] No available units in inventory.\n");
-			return;
-		}
-
-		System.out.printf("%-10s | %-6s | %-12s | %-12s | %-12s | %-10s%n",
-				"BARCODE", "GROUP", "COMPONENT", "COLLECTED", "EXPIRY DATE", "STATUS");
-		System.out.println("-----------------------------------------------------------------------");
-		for (BloodUnit u : units) {
-			System.out.printf("%-10s | %-6s | %-12s | %-12s | %-12s | %-10s%n",
-					u.getBarcode(), u.getBloodGroup(), u.getComponentType(),
-					u.getCollectionDate(), u.getExpiryDate(), u.getStatus());
-		}
-		System.out.println();
+		reportingService.generateFefoExpiryReport();
 	}
-
 	private static void handleRaiseHospitalRequest() {
 		System.out.println("\n--- [FR4] Raise Hospital Blood Request ---");
 		System.out.print("Enter Hospital Name: ");
@@ -280,69 +263,11 @@ public class BloodBankDonorManagementSystemApplication implements CommandLineRun
 	}
 
 	private static void handleFlagExpiringUnits() {
-		System.out.println("\n--- [FR7] Expiry Alert Tracker (Next 3 Days) ---");
-		LocalDate today = LocalDate.now();
-		LocalDate alertThreshold = today.plusDays(3);
-
-		List<BloodUnit> expiringUnits = bloodUnitRepository.findAll().stream()
-				.filter(u -> "AVAILABLE".equalsIgnoreCase(u.getStatus()))
-				.filter(u -> !u.getExpiryDate().isBefore(today) && !u.getExpiryDate().isAfter(alertThreshold))
-				.sorted(Comparator.comparing(BloodUnit::getExpiryDate))
-				.toList();
-
-		if (expiringUnits.isEmpty()) {
-			System.out.println("[INFO] No units are nearing expiration within the next 3 days.\n");
-			return;
-		}
-
-		System.out.println("[CRITICAL ALERT] The following units expire soon and must be prioritized (FEFO):");
-		System.out.printf("%-10s | %-6s | %-12s | %-12s | %-15s%n",
-				"BARCODE", "GROUP", "COMPONENT", "EXPIRY", "DAYS REMAINING");
-		System.out.println("------------------------------------------------------------------");
-
-		for (BloodUnit unit : expiringUnits) {
-			long daysLeft = ChronoUnit.DAYS.between(today, unit.getExpiryDate());
-			System.out.printf("%-10s | %-6s | %-12s | %-12s | %d day(s)%n",
-					unit.getBarcode(), unit.getBloodGroup(), unit.getComponentType(),
-					unit.getExpiryDate(), daysLeft);
-		}
-		System.out.println();
+		reportingService.generateExpiryAlertReport(3);
 	}
 
 	private static void handleViewStockDashboard() {
-		System.out.println("\n--- [FR8] Blood Stock Dashboard Summary ---");
-		List<BloodUnit> allUnits = bloodUnitRepository.findAll();
-
-		if (allUnits.isEmpty()) {
-			System.out.println("[INFO] Stock is completely empty.\n");
-			return;
-		}
-
-		// Aggregate counts by blood group for AVAILABLE units
-		Map<String, Long> stockByGroup = allUnits.stream()
-				.filter(u -> "AVAILABLE".equalsIgnoreCase(u.getStatus()))
-				.collect(Collectors.groupingBy(BloodUnit::getBloodGroup, Collectors.counting()));
-
-		// Aggregate counts by component type
-		Map<String, Long> stockByComponent = allUnits.stream()
-				.filter(u -> "AVAILABLE".equalsIgnoreCase(u.getStatus()))
-				.collect(Collectors.groupingBy(BloodUnit::getComponentType, Collectors.counting()));
-
-		long totalAvailable = stockByGroup.values().stream().mapToLong(Long::longValue).sum();
-
-		System.out.println("AVAILABLE UNITS BY BLOOD GROUP:");
-		System.out.printf("%-12s | %-8s%n", "BLOOD GROUP", "UNITS");
-		System.out.println("-------------------------");
-		String[] groups = {"A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"};
-		for (String bg : groups) {
-			System.out.printf("%-12s | %-8d%n", bg, stockByGroup.getOrDefault(bg, 0L));
-		}
-
-		System.out.println("\nAVAILABLE UNITS BY COMPONENT TYPE:");
-		stockByComponent.forEach((comp, count) -> System.out.printf("%-12s : %d unit(s)%n", comp, count));
-
-		System.out.println("-------------------------");
-		System.out.println("Total Available Stock: " + totalAvailable + " unit(s)");
-		System.out.println("Total Registered Donors: " + donorRepository.count() + "\n");
+		reportingService.generateStockDashboardReport();
+		reportingService.generateDonorEligibilityReport();
 	}
 }
