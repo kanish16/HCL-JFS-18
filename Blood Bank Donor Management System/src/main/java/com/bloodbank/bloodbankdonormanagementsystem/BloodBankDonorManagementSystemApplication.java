@@ -10,6 +10,7 @@ import com.bloodbank.bloodbankdonormanagementsystem.model.Donor;
 import com.bloodbank.bloodbankdonormanagementsystem.repository.CrudRepository;
 import com.bloodbank.bloodbankdonormanagementsystem.repository.InMemoryRepository;
 import com.bloodbank.bloodbankdonormanagementsystem.service.BloodBankReportingService;
+import com.bloodbank.bloodbankdonormanagementsystem.service.DonorNotificationService;
 import com.bloodbank.bloodbankdonormanagementsystem.strategy.CompatibilityStrategy;
 import com.bloodbank.bloodbankdonormanagementsystem.util.CsvDataLoader;
 import org.springframework.boot.CommandLineRunner;
@@ -19,6 +20,9 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 
 @SpringBootApplication
@@ -45,6 +49,8 @@ public class BloodBankDonorManagementSystemApplication implements CommandLineRun
 		SpringApplication.run(BloodBankDonorManagementSystemApplication.class, args);
 	}
 
+	private static DonorNotificationService notificationService;
+
 	@Override
 	public void run(String... args) {
 		scanner = new Scanner(System.in);
@@ -54,6 +60,7 @@ public class BloodBankDonorManagementSystemApplication implements CommandLineRun
 		CsvDataLoader.loadDonorsFromCsv("data/donors.csv", donorRepository);
 		CsvDataLoader.loadBloodUnitsFromCsv("data/blood_units.csv", bloodUnitRepository);
 		reportingService = new BloodBankReportingService(donorRepository, bloodUnitRepository, bloodRequestRepository);
+		notificationService = new DonorNotificationService(donorRepository);
 		System.out.println("Active Donors count: " + donorRepository.count());
 		System.out.println("Active Inventory count: " + bloodUnitRepository.count() + "\n");
 
@@ -64,11 +71,11 @@ public class BloodBankDonorManagementSystemApplication implements CommandLineRun
 
 		do {
 			printMenu();
-			System.out.print("Select an option (0-8): ");
+			System.out.print("Select an option (0-9): ");
 
 			if (!scanner.hasNextInt()) {
 				String invalidInput = scanner.next();
-				System.out.println("\n[!] Invalid input: '" + invalidInput + "'. Please enter a number between 0 and 8.\n");
+				System.out.println("\n[!] Invalid input: '" + invalidInput + "'. Please enter a number between 0 and 9.\n");
 				continue;
 			}
 
@@ -85,8 +92,10 @@ public class BloodBankDonorManagementSystemApplication implements CommandLineRun
 					case 6 -> handleIssueUnits();
 					case 7 -> handleFlagExpiringUnits();
 					case 8 -> handleViewStockDashboard();
+					case 9 -> handleEmergencyBroadcast();
 					case 0 -> {
 						System.out.println("\nExiting Blood Bank System. Session closed.");
+						notificationService.shutdown();
 						running = false;
 					}
 					default -> System.out.println("\n[!] Choice out of range. Please choose between 0 and 8.\n");
@@ -118,6 +127,7 @@ public class BloodBankDonorManagementSystemApplication implements CommandLineRun
 		System.out.println("6. [FR6] Issue Units Against Request");
 		System.out.println("7. [FR7] View Expiry Alerts (Expiring in 3 Days)");
 		System.out.println("8. [FR8] View Stock Dashboard by Blood Group");
+		System.out.println("9. [FR9] Emergency Async Donor Broadcast (CompletableFuture)");
 		System.out.println("0. Exit");
 		System.out.println("-------------------------------------------------");
 	}
@@ -269,5 +279,54 @@ public class BloodBankDonorManagementSystemApplication implements CommandLineRun
 	private static void handleViewStockDashboard() {
 		reportingService.generateStockDashboardReport();
 		reportingService.generateDonorEligibilityReport();
+	}
+
+	/**
+	 * Concept Hook: CompletableFuture parallel dispatch with safe failure handling
+	 */
+	private static void handleEmergencyBroadcast() {
+		System.out.println("\n--- [FR9] Emergency Async Donor Broadcast ---");
+		System.out.print("Enter Target Hospital Request ID: ");
+		String reqId = scanner.nextLine().trim();
+
+		BloodRequest request = bloodRequestRepository.findById(reqId)
+				.orElseThrow(() -> new IllegalArgumentException("Request ID '" + reqId + "' not found."));
+
+		System.out.printf("[BROADCAST STARTED] Initiating parallel notification dispatch for %s %s...\n",
+				request.getBloodGroup(), request.getComponentType());
+
+		long startTime = System.currentTimeMillis();
+
+		// Trigger CompletableFuture async pipeline
+		CompletableFuture<List<DonorNotificationService.NotificationResult>> future =
+				notificationService.sendEmergencyAlertsAsync(request);
+
+		// UI non-blocking indication or wait with get()/join()
+		try {
+			List<DonorNotificationService.NotificationResult> results = future.get(5, java.util.concurrent.TimeUnit.SECONDS);
+
+			long elapsed = System.currentTimeMillis() - startTime;
+			System.out.println("\n--- Broadcast Dispatch Summary (Completed in " + elapsed + " ms) ---");
+			System.out.printf("%-10s | %-16s | %-12s | %-10s | %-30s%n",
+					"DONOR ID", "NAME", "PHONE", "STATUS", "REASON/PAYLOAD");
+			System.out.println("----------------------------------------------------------------------------------------");
+
+			for (var r : results) {
+				String statusLabel = r.success() ? "[DELIVERED]" : "[FAILED]";
+				System.out.printf("%-10s | %-16s | %-12s | %-10s | %-30s%n",
+						r.donorId(), r.donorName(), r.phone(), statusLabel, r.message());
+			}
+
+			long successful = results.stream().filter(DonorNotificationService.NotificationResult::success).count();
+			System.out.printf("\nSent: %d | Delivered: %d | Fallbacks Handled: %d\n",
+					results.size(), successful, (results.size() - successful));
+			System.out.println("[INFO] System stayed alive and menu recovered without crash.\n");
+
+		} catch (TimeoutException te) {
+			System.err.println("[TIMEOUT] Asynchronous dispatch took too long. Cancelling remaining tasks.");
+			future.cancel(true);
+		} catch (InterruptedException | ExecutionException e) {
+			System.err.println("[ERROR] Async execution failed safely: " + e.getMessage());
+		}
 	}
 }
