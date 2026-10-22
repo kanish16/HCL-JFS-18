@@ -6,24 +6,22 @@ import java.util.Set;
 
 public class RedBloodCellCompatibilityStrategy implements CompatibilityStrategy {
 
-    private static final Map<String, Set<String>> RBC_MAP = Map.of(
-            "AB+", Set.of("A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"),
-            "AB-", Set.of("A-", "B-", "AB-", "O-"),
-            "A+",  Set.of("A+", "A-", "O+", "O-"),
-            "A-",  Set.of("A-", "O-"),
-            "B+",  Set.of("B+", "B-", "O+", "O-"),
-            "B-",  Set.of("B-", "O-"),
-            "O+",  Set.of("O+", "O-"),
-            "O-",  Set.of("O-")
+    private static final Map<String, Set<String>> COMPATIBILITY_MAP = Map.of(
+            "O-", Set.of("O-"),
+            "O+", Set.of("O-", "O+"),
+            "A-", Set.of("O-", "A-"),
+            "A+", Set.of("O-", "O+", "A-", "A+"),
+            "B-", Set.of("O-", "B-"),
+            "B+", Set.of("O-", "O+", "B-", "B+"),
+            "AB-", Set.of("O-", "A-", "B-", "AB-"),
+            "AB+", Set.of("O-", "O+", "A-", "A+", "B-", "B+", "AB-", "AB+")
     );
 
     @Override
-    public Set<String> getCompatibleDonorGroups(String recipientGroup) {
-        return RBC_MAP.getOrDefault(recipientGroup.toUpperCase(), Collections.emptySet());
-    }
-
-    @Override
-    public String getComponentScope() {
-        return "Red Blood Cells / Whole Blood (RBC)";
+    public Set<String> getCompatibleDonorGroups(String recipientBloodGroup) {
+        if (recipientBloodGroup == null) {
+            return Collections.emptySet();
+        }
+        return COMPATIBILITY_MAP.getOrDefault(recipientBloodGroup.toUpperCase(), Collections.emptySet());
     }
 }
